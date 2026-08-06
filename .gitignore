@@ -179,3 +179,12 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+.env
+.venv/
+__pycache__/
+*.pyc
+dbt/tfl_pipeline/target/
+dbt/tfl_pipeline/dbt_packages/
+logs/
+keys/
