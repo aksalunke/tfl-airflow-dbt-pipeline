@@ -188,3 +188,4 @@ dbt/tfl_pipeline/target/
 dbt/tfl_pipeline/dbt_packages/
 logs/
 keys/
+config/
