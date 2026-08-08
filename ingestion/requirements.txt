@@ -1,0 +1,4 @@
+google-cloud-bigquery==3.42.3
+python-dotenv==1.2.2
+requests==2.34.2
+requests-oauthlib==2.0.0
