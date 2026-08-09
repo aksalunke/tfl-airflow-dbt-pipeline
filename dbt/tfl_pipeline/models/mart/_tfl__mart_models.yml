@@ -1,0 +1,27 @@
+version: 2
+
+models:
+  - name: mart_current_line_status
+    description: >
+      The most recent known status for each tube line. A line can appear
+      more than once if it genuinely has multiple concurrent statuses in
+      its latest ingestion batch (e.g. 'Part Suspended' and 'Special
+      Service' at the same time) — this is preserved deliberately rather
+      than collapsed to a single row.
+    columns:
+      - name: line_id
+        description: "TfL's internal identifier for the line, e.g. 'central'."
+        tests:
+          - not_null
+      - name: line_name
+        description: "Human-readable line name, e.g. 'Central'."
+        tests:
+          - not_null
+      - name: status_description
+        description: "Most recent status for this line, e.g. 'Good Service'."
+        tests:
+          - not_null
+      - name: ingested_at
+        description: "Timestamp of the ingestion batch this status came from."
+        tests:
+          - not_null

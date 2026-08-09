@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: stg_line_status
+    description: >
+      Cleaned, renamed view of raw TfL line status data. One row per
+      (line, status, ingestion batch) — mirrors the raw table exactly,
+      just relabeled for clarity.
+    columns:
+      - name: ingested_at
+        description: "UTC timestamp when this batch was pulled from the TfL API."
+        tests:
+          - not_null
+      - name: line_id
+        description: "TfL's internal identifier for the line, e.g. 'central'."
+        tests:
+          - not_null
+      - name: line_name
+        description: "Human-readable line name, e.g. 'Central'."
+        tests:
+          - not_null
+      - name: status_severity
+        description: "TfL's numeric severity code for this status."
+        tests:
+          - not_null
+      - name: status_description
+        description: "Human-readable status, e.g. 'Good Service', 'Part Suspended'."
+        tests:
+          - not_null
+      - name: disruption_reason
+        description: "Explanation text for a disruption; null when service is Good Service."

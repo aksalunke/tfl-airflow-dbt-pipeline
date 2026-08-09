@@ -1,0 +1,29 @@
+version: 2
+
+sources:
+  - name: tfl
+    schema: tfl_dev
+    tables:
+      - name: raw_line_status
+        description: >
+          Raw TfL Line Status API responses, one row per (line, status) pair,
+          appended by the ingest script on every run. Never overwritten —
+          this is the audit trail.
+        config:
+          loaded_at_field: ingested_at
+          freshness:
+            warn_after: {count: 26, period: hour}
+            error_after: {count: 48, period: hour}
+        columns:
+          - name: ingested_at
+            description: "UTC timestamp when this batch was pulled from the TfL API."
+          - name: line_id
+            description: "TfL's internal identifier for the line, e.g. 'central'."
+          - name: line_name
+            description: "Human-readable line name, e.g. 'Central'."
+          - name: status_severity
+            description: "TfL's numeric severity code for this status."
+          - name: status_severity_description
+            description: "Human-readable status, e.g. 'Good Service', 'Part Suspended'."
+          - name: reason
+            description: "Explanation text for a disruption; null when service is Good Service."
