@@ -1,0 +1,21 @@
+[project]
+name = "tfl-airflow-dbt-pipeline"
+version = "0.1.0"
+description = "Batch pipeline ingesting live TfL Unified API data, orchestrated with Apache Airflow, transformed with dbt, and loaded into BigQuery"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["ingestion"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
