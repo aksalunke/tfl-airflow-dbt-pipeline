@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 import requests
@@ -117,7 +117,7 @@ def main() -> None:
             "TFL_API_KEY not set — proceeding unauthenticated (50 requests/hour limit)."
         )
 
-    ingested_at = datetime.now(timezone.utc)
+    ingested_at = datetime.now(UTC)
 
     logger.info("Fetching tube line status from TfL API...")
     raw_lines = fetch_line_status(api_key)
