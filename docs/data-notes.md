@@ -28,3 +28,17 @@ which dbt flagged as an unrecognized custom key. Root cause was a manual indenta
 ## Entry 7 — GOOGLE_APPLICATION_CREDENTIALS missing despite being instructed
 The env var was specified as a setup step, but verification later revealed it was never actually added to `.env` — a step that looked complete based on conversation flow wasn't actually done on disk. Caught by directly checking file contents rather than assuming prior instructions were followed. 
 Lesson: verify state, don't infer it from conversation history.
+
+## Entry 8 — dbt doesn't read .env
+`GOOGLE_APPLICATION_CREDENTIALS` being present in `.env` wasn't enough for local `dbt` commands to authenticate after switching to `method: oauth`. `python-dotenv` (used by `tfl_ingest.py`) loads `.env` into that Python process's own environment — but `dbt` is a separate CLI process that never reads `.env` at all. Fixed by setting the same variable as a genuine, persistent Windows user environment variable, visible to any new terminal — and therefore to `dbt` directly.
+
+## Entry 9 — Airflow 3.x relocated core operator imports
+Most available tutorials show `from airflow import DAG` and `from airflow.operators.bash import BashOperator` — the Airflow 2.x paths. Verified the current correct paths against the official 3.3.0
+docs before writing the DAG (`from airflow.sdk import DAG`, `from airflow.providers.standard.operators.bash import BashOperator`) rather than assuming. Guessing wrong here would have failed as a silent DAG import error in the UI, with no obvious link back to "the tutorial was for an older version."
+
+## Entry 10 — Airflow UI timezone vs. BigQuery UTC
+The first DAG-triggered run's Start Date appeared not to match any row in `raw_line_status`. Root cause: the Airflow UI displays local browser time (BST, UTC+1), while `ingested_at` is stored in pure UTC. Converted correctly, the matching row was exactly where expected, ~37 seconds
+after task start — real time spent calling the TfL API. Lesson: always compare timestamps in UTC, never in whatever a UI happens to display.
+
+## Entry 11 — docker compose commands fail silently if Docker Desktop isn't running
+`docker compose down` failed with a "cannot connect to the Docker API" error — not a configuration problem, just Docker Desktop not yet running in that session. Any `docker`/`docker compose` command fails the same way until Docker Desktop is manually opened and its whale icon in the system tray stops animating.
