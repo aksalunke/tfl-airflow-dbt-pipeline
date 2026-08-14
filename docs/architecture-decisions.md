@@ -24,7 +24,7 @@ documented minimum (4GB just for Docker) would leave under 4GB for Windows, Dock
 ## ADR 5 — Row-per-(line, status), not row-per-line
 **Context:** The TfL API can return more than one concurrent status for a single line (e.g. 'Part Suspended' and 'Special Service' both active at once) — confirmed via real API research, not assumption.
 **Decision:** `transform_records()` iterates every entry in each line's `lineStatuses` array, producing one row per status, not just the first.
-**Reasoning:** Most example code online naively takes index [0] and silently drops the second status. Preserving both was a deliberate data-quality choice, made before it became a bug report.
+**Reasoning:** Most example code online naively takes index [0] and silently drops the second status. Preserving both was a deliberate data-quality choice, made before it became a bug report. Covered by 'test_transform_records_preserves_concurrent_statuses' in the pytest suite — the design decision is now enforced, not just documented.
 
 ## ADR 6 — dense_rank() over row_number() in mart_current_line_status
 **Context:** Needed the "latest status per line" logic to respect ADR 5.
@@ -41,3 +41,37 @@ documented minimum (4GB just for Docker) would leave under 4GB for Windows, Dock
 **Decision:** Set `GOOGLE_APPLICATION_CREDENTIALS` as an environment variable rather than writing explicit credential-loading code with a hardcoded path.
 **Reasoning:** Moving this script into Docker later only requires changing where the env var points — a config change, not a code change. Keeps infrastructure concerns out of application logic, same principle as IAM roles living in CloudFormation rather than hardcoded into Glue
 scripts on the AWS project.
+
+## ADR 9 — CI scope limited to ingestion/ Python code
+**Context:** GitHub Actions CI runs lint, type-check, and tests on every push/PR to main.
+**Decision:** CI covers only `ingestion/` (ruff, mypy, pytest) — dbt models and the Airflow DAG are not validated automatically.
+**Reasoning:** Testing dbt in CI needs BigQuery credentials as a GitHub Secret and a separate CI-only dataset, so automated runs never pollute `tfl_dev`. Testing the DAG needs Docker running inside the CI runner itself. Both are real, addressable gaps — deliberately scoped out to
+ship a working CI pass first, not oversights.
+
+## ADR 10 — catchup=False, no historical backfill
+**Context:** `start_date` is necessarily in the past by the time the DAG is first deployed and unpaused.
+**Decision:** `catchup=False` — Airflow does not backfill missed scheduled runs between `start_date` and today.
+**Reasoning:** TfL's Line Status endpoint only ever answers "what's happening right now" — there's no way to ask it about a past date. A backfilled run would just call the live endpoint and relabel today's snapshot as historical, which is misleading rather than a genuine gap-fill. `catchup=True` is correct for sources with real historical records (a warehouse table already holding past data) — not this one.
+
+## ADR 11 — dbt authentication via oauth/ADC, extending ADR 8 to dbt 
+**Context:** `profiles.yml` originally authenticated via `method: service-account` with an explicit Windows file path — unusable once dbt needed to run inside a Linux container too.
+**Decision:** Switched to `method: oauth`, which resolves credentials via Application Default Credentials (`google.auth.default()`) — the same mechanism the ingest script already used (ADR 8).
+**Reasoning:** Verified directly against dbt-bigquery's actual source behavior rather than assumed — `method: oauth` genuinely calls `google.auth.default()`, checking `GOOGLE_APPLICATION_CREDENTIALS`
+first. One `profiles.yml` now works unchanged on Windows and inside Docker; only the environment variable's *value* differs — set as a persistent Windows user variable locally, overridden per-container in `docker-compose.yaml`.
+
+## ADR 12 — BashOperator for every DAG task, including the ingest script
+**Context:** The ingest task could have used PythonOperator (importing `tfl_ingest.main()` directly) or BashOperator (shelling out to `python tfl_ingest.py`).
+**Decision:** BashOperator throughout.
+**Reasoning:** Every task's `bash_command` is identical to the command already used for manual testing during development. If a task fails, the exact same command can be copied and run directly inside the container to reproduce it — no translation between "how Airflow calls
+it" and "how I'd call it myself."
+
+## ADR 13 — Scheduler reliability is bound to host machine uptime
+**Context:** This DAG's scheduler runs inside Docker Desktop on a personal laptop, not a cloud-hosted Airflow instance.
+**Decision:** Accepted as a scoped, documented limitation.
+**Reasoning:** If the host machine is asleep or Docker Desktop isn't running at 6am, that day's run simply doesn't happen, and `catchup=False` (ADR 10) means it's never backfilled. A managed
+deployment (e.g. Cloud Composer) would remove this dependency entirely.
+
+## ADR 14 — Dependency injection over internal construction, for testability
+**Context:** Writing pytest tests surfaced a real difference in how easily two similarly-shaped functions could be tested.
+**Decision:** `ensure_dataset_exists(client, ...)` accepts its BigQuery client as a parameter rather than constructing one internally, unlike `fetch_line_status`, which calls `requests.get` directly inside itself.
+**Reasoning:** The dependency-injected function needed only a plain `MagicMock()` passed in to test. `fetch_line_status` required `@patch("tfl_ingest.requests.get")` to forcibly substitute its internal call. Where a dependency can reasonably be passed in rather than self-constructed, doing so avoids needing to patch at all — worth applying deliberately to future functions, not just noticed after the fact.
