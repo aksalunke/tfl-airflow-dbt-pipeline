@@ -1,0 +1,12 @@
+tfl_pipeline:
+  target: ci
+  outputs:
+    ci:
+      type: bigquery
+      method: oauth
+      project: dev-tfl-pipeline
+      dataset: tfl_ci
+      threads: 4
+      timeout_seconds: 300
+      location: EU
+      priority: interactive

@@ -31,3 +31,21 @@ jobs:
 
       - name: Run tests
         run: pytest -v
+
+      - name: Check DAG file compiles
+        run: python -m py_compile dags/tfl_pipeline_dag.py
+
+      - name: Install dbt
+        run: pip install dbt-bigquery==1.12.0
+
+      - name: Write GCP service account key
+        run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-key.json
+
+      - name: dbt run and test
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          DBT_PROFILES_DIR: ${{ github.workspace }}/.dbt-ci
+          DBT_PROJECT_DIR: ${{ github.workspace }}/dbt/tfl_pipeline
+        run: |
+          dbt run
+          dbt test
