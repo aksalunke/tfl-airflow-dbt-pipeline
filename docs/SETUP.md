@@ -208,10 +208,135 @@ dbt test --select mart
 ```
 All tests should pass. Check `tfl_dev.mart_current_line_status` in BigQuery.
 
+## Phase 8 — The DAG (Orchestration)
+`dags/tfl_pipeline_dag.py` wires the ingest script and dbt commands into one dependency chain: ingest → dbt run staging → dbt test staging → dbt run mart → dbt test mart. 
+Any task failing stops everything downstream of it.
+
+Key settings: 
+`catchup=False` (TfL's API only answers "right now" — backfilling past dates would just relabel today's data as historical, see ADR 10), 
+`retries=3` with a 5-minute delay, 
+schedule `"0 6 * * *"`.
+
+Airflow 3.x import paths, confirmed against current docs — not the older 2.x paths most tutorials still show: 
+```python
+from airflow.sdk import DAG
+from airflow.providers.standard.operators.bash import BashOperator
+```
+
+The dag-processor picks up new/changed files automatically — allow up to 5 minutes, or just refresh the UI. New DAGs load paused by default; trigger manually first to prove it works, then unpause (or tick "Unpause on trigger" in the trigger dialog to do both at once).
+
+Verify: trigger via `http://localhost:8080`, watch the Graph view — all 5 tasks should go green. Cross-check the `ingested_at` timestamp against BigQuery `raw_line_status` to confirm Airflow (not a manual run) actually wrote it — remember the UI shows local browser time, BigQuery stores UTC.
+
 ---
 
-## What's Not Yet Built
-The DAG itself — Airflow calling the ingest script and dbt commands
-automatically, in sequence, on a schedule. Everything above is proven
-working independently; wiring it together is the next phase.
+## Phase 9 — Local Dev Tooling: pytest, ruff, mypy
+```powershell
+pip install pytest ruff mypy
+```
+
+Capture exact versions into `requirements-dev.txt`:
+```powershell
+pip freeze | Select-String "pytest|ruff|mypy"
+```
+
+**`pyproject.toml`** additions:
+```toml
+[project]
+name = "tfl-airflow-dbt-pipeline"
+version = "0.1.0"
+requires-python = ">=3.13"
+
+[tool.pytest.ini_options]
+pythonpath = ["ingestion"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.mypy]
+python_version = "3.13"
+ignore_missing_imports = true
+warn_unused_ignores = true
+```
+
+`tests/test_tfl_ingest.py` covers `transform_records` (including the concurrent-status edge case from ADR 5), 
+`_require_env`, `fetch_line_status` (mocked via `@patch`, since it calls `requests.get` internally), and 
+`ensure_dataset_exists` (dependency-injected mock client, no patching needed — see ADR 8's design pattern).
+
+Verify:
+```powershell
+ruff check .
+mypy ingestion\tfl_ingest.py
+pytest -v
+```
+Expect 9 passed, zero lint/type issues.
+
+---
+
+## Phase 10 — GitHub Actions CI
+`.github/workflows/ci.yml` — triggers on push and PR to `main`, runs on a fresh `ubuntu-latest` runner: checkout, Python 3.13 setup, install both requirements files, then `ruff check .`, `mypy`, `pytest -v` in sequence.
+
+Original scope was Python-only (ADR 9) — extended to cover dbt and DAG syntax in Phase 11 below (ADR 15).
+
+Verify: push, check the **Actions** tab on GitHub — green check within under a minute confirms the whole chain works on a machine that's never seen this code before, not just locally.
+
+---
+
+## Phase 11 — Extending CI to dbt Validation and DAG Syntax
+Add a repository secret: **Settings → Secrets and variables → Actions → New repository secret**, name `GCP_SA_KEY`, value = the full raw contents of `keys/service-account.json`.
+
+**`.dbt-ci/profiles.yml`** (committed — no secrets, `method: oauth`):
+```yaml
+tfl_pipeline:
+  target: ci
+  outputs:
+    ci:
+      type: bigquery
+      method: oauth
+      project: dev-tfl-pipeline
+      dataset: tfl_ci
+      threads: 4
+      timeout_seconds: 300
+      location: EU
+      priority: interactive
+```
+
+`_tfl__sources.yml` hardcodes `schema: tfl_dev`, so CI reads real raw data regardless of target — only the *build* destination is isolated. See ADR 15.
+
+Add to `.github/workflows/ci.yml`:
+```yaml
+      - name: Check DAG file compiles
+        run: python -m py_compile dags/tfl_pipeline_dag.py
+
+      - name: Install dbt
+        run: pip install dbt-bigquery==1.12.0
+
+      - name: Write GCP service account key
+        run: echo '${{ secrets.GCP_SA_KEY }}' > /tmp/gcp-key.json
+
+      - name: dbt run and test
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: /tmp/gcp-key.json
+          DBT_PROFILES_DIR: ${{ github.workspace }}/.dbt-ci
+          DBT_PROJECT_DIR: ${{ github.workspace }}/dbt/tfl_pipeline
+        run: |
+          dbt run
+          dbt test
+```
+
+DAG check is `py_compile` only — syntax, not import validity. A full `apache-airflow` install was considered and rejected as disproportionate for this check (ADR 15).
+
+Verify: push, check **Actions** — green within ~90 seconds.
+
+---
+
+## What's Left
+
+Nothing infrastructure-related — this runbook reflects the full, current, CI-checked state of the repo.
+
+
 
