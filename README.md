@@ -145,3 +145,6 @@ Documented honestly rather than hidden:
 - [`docs/data-notes.md`](docs/data-notes.md) — real bugs hit during the build, and how they were found and fixed
 
 - [`docs/SETUP.md`](docs/SETUP.md) — full infrastructure runbook, tested end to end on a fresh machine
+
+## Author
+   Akshay Salunke | AWS Solutions Architect | MSc Financial Technology | [LinkedIn]https://linkedin.com/in/akshayksalunke
