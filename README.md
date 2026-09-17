@@ -147,6 +147,10 @@ Documented honestly rather than hidden:
 - [`docs/SETUP.md`](docs/SETUP.md) — full infrastructure runbook, tested end to end on a fresh machine
 
 ## Author
+<<<<<<< HEAD
 Akshay Salunke | AWS Solutions Architect | MSc Financial Technology | [LinkedIn]https://linkedin.com/in/akshayksalunke
 
 © 2026 Akshay Salunke. All rights reserved. This code is shared for portfolio and demonstration purposes only; no license is granted for reuse, modification, or redistribution.
+=======
+   Akshay Salunke | AWS Solutions Architect | MSc Financial Technology | [LinkedIn]https://linkedin.com/in/akshayksalunke
+>>>>>>> 9d1303b27272e5abb9b6dbdc36f9338dbd200fea
